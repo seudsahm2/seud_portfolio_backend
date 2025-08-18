@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
+from datetime import timedelta
 from pathlib import Path
 from decouple import config, Csv
 from urllib.parse import urlparse
@@ -42,6 +43,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # Third-party
     "rest_framework",
+    "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     "django_filters",
     "drf_spectacular",
@@ -188,6 +190,11 @@ REST_FRAMEWORK = {
     "DEFAULT_FILTER_BACKENDS": (
         "django_filters.rest_framework.DjangoFilterBackend",
     ),
+    # Throttle rates for scoped throttles used in views
+    "DEFAULT_THROTTLE_RATES": {
+        "contact": "10/hour",
+        "chat": "30/minute",
+    },
 }
 
 # drf-spectacular
@@ -219,6 +226,36 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 X_FRAME_OPTIONS = "DENY"
 
+# SimpleJWT
+SIMPLE_JWT = {
+    # Token lifetimes
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=3),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
+
+    # Refresh rotation and blacklist (requires token_blacklist app + migration)
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+
+    # Auth header handling
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "AUTH_HEADER_NAME": "HTTP_AUTHORIZATION",
+
+    # Token format/claims
+    "ALGORITHM": "HS256",
+    # SIGNING_KEY defaults to Django SECRET_KEY; override via SIMPLE_JWT if needed
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+    "TOKEN_TYPE_CLAIM": "token_type",
+    "JTI_CLAIM": "jti",
+
+    # Classes used for auth
+    "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
+
+    # Optional: if you switch to sliding tokens later
+    "SLIDING_TOKEN_LIFETIME": timedelta(hours=3),
+    "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=30),
+}
+
 # Supabase storage (used for media in production; local files in dev)
 SUPABASE_URL = config("SUPABASE_URL", default="")
 SUPABASE_ANON_KEY = config("SUPABASE_ANON_KEY", default="")
@@ -240,6 +277,11 @@ EMAIL_BACKEND = config(
     default="django.core.mail.backends.console.EmailBackend",
 )
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="no-reply@example.com")
+
+# AI providers
+GOOGLE_API_KEY = config("GOOGLE_API_KEY", default="")
+GROQ_API_KEY = config("GROQ_API_KEY", default="")
+GITHUB_TOKEN = config("GITHUB_TOKEN", default="")
 
 # Celery
 CELERY_BROKER_URL = config("CELERY_BROKER_URL", default=REDIS_URL)
