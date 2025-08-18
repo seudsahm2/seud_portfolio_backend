@@ -1,5 +1,6 @@
 from django.contrib import admin
 from .models import Profile, Project, Experience, Skill, BlogPost
+from .models import KnowledgeDocument, ChatLog
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
@@ -27,3 +28,13 @@ class BlogPostAdmin(admin.ModelAdmin):
     list_display = ("title", "slug", "published_at")
     search_fields = ("title", "slug", "summary")
     prepopulated_fields = {"slug": ("title",)}
+
+@admin.register(KnowledgeDocument)
+class KnowledgeDocumentAdmin(admin.ModelAdmin):
+    list_display = ("source", "title", "updated_at")
+    search_fields = ("source", "title", "content")
+
+@admin.register(ChatLog)
+class ChatLogAdmin(admin.ModelAdmin):
+    list_display = ("provider", "model", "status", "latency_ms", "created_at")
+    search_fields = ("question", "answer", "error")

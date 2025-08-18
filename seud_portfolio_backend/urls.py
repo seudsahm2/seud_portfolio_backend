@@ -52,6 +52,8 @@ urlpatterns = [
     ),
     path("api/", include(router.urls)),
     path("api/contact", portfolio_views.ContactView.as_view(), name="contact"),
+    path("api/knowledge/refresh", portfolio_views.KnowledgeRefreshView.as_view(), name="knowledge-refresh"),
+    path("api/chat/ask", portfolio_views.ChatAskView.as_view(), name="chat-ask"),
     path("api/auth/jwt/create", TokenObtainPairView.as_view(), name="jwt-create"),
     path("api/auth/jwt/refresh", TokenRefreshView.as_view(), name="jwt-refresh"),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
