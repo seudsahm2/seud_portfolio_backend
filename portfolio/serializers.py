@@ -51,5 +51,7 @@ class ChatAskSerializer(serializers.Serializer):
     provider = serializers.ChoiceField(choices=[("google", "google"), ("groq", "groq")])
     model = serializers.CharField(max_length=100, required=False, allow_blank=True)
     question = serializers.CharField(max_length=4000)
-    max_tokens = serializers.IntegerField(required=False, min_value=32, max_value=2048)
+    max_tokens = serializers.IntegerField(required=False)
+    structured = serializers.BooleanField(required=False, default=True)
+    top_n = serializers.IntegerField(required=False, min_value=1, max_value=20, default=6)
 

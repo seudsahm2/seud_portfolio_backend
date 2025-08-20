@@ -77,6 +77,7 @@ class ChatLog(models.Model):
     model = models.CharField(max_length=100, blank=True)
     question = models.TextField()
     answer = models.TextField(blank=True)
+    answer_json = models.JSONField(null=True, blank=True)
     status = models.CharField(max_length=20, default="ok")  # ok / error
     error = models.TextField(blank=True)
     tokens_prompt = models.IntegerField(null=True, blank=True)
