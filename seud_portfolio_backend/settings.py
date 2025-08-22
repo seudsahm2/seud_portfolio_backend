@@ -318,9 +318,17 @@ SIMPLE_JWT = {
 }
 
 # Supabase storage (used for media in production; local files in dev)
-# Distinguish the project API URL from any DB URLs. Prefer SUPABASE_PROJECT_URL, else use SUPABASE_URL if it looks like https.
-_SUPABASE_PROJECT_URL_RAW = config("SUPABASE_PROJECT_URL", default=config("SUPABASE_URL", default=""))
-SUPABASE_PROJECT_URL = _SUPABASE_PROJECT_URL_RAW if str(_SUPABASE_PROJECT_URL_RAW).startswith("http") else ""
+# Distinguish the project API URL from any DB URLs. Prefer SUPABASE_PROJECT_URL,
+# accept common alias SUPABASE_Project_URL, else use SUPABASE_URL if it looks like https.
+_SUPABASE_PROJECT_URL_RAW = config(
+    "SUPABASE_PROJECT_URL",
+    default=config("SUPABASE_Project_URL", default=config("SUPABASE_URL", default="")),
+)
+SUPABASE_PROJECT_URL = (
+    str(_SUPABASE_PROJECT_URL_RAW).strip()
+    if str(_SUPABASE_PROJECT_URL_RAW).startswith("http")
+    else ""
+)
 SUPABASE_ANON_KEY = config("SUPABASE_ANON_KEY", default="")
 # Prefer service role key for server-side uploads if provided; accept SUPABASE_SERVICE_KEY alias
 SUPABASE_SERVICE_ROLE_KEY = config("SUPABASE_SERVICE_ROLE_KEY", default=config("SUPABASE_SERVICE_KEY", default=""))
