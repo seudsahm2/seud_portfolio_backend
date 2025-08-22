@@ -9,14 +9,14 @@ from django.utils import timezone
 
 try:
     from supabase import create_client  # type: ignore
-except Exception:  # pragma: no cover
+except Exception:  # pragma: no cover  # noqa: BLE001
     create_client = None  # type: ignore
 
 _supabase_client = None
 
 
 def _get_client():
-    global _supabase_client
+    global _supabase_client  # noqa: PLW0603
     if _supabase_client is None:
         if create_client is None:
             raise RuntimeError("supabase package not installed")
@@ -61,15 +61,27 @@ class SupabaseMediaStorage(Storage):
         if hasattr(content, "seek"):
             try:
                 content.seek(0)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 pass
         data = content.read()
         if isinstance(data, str):
             data = data.encode("utf-8")
         # Content type best-effort
-        ctype = getattr(content, "content_type", None) or mimetypes.guess_type(path)[0] or "application/octet-stream"
-        # The supabase client doesn't require file options
-        client.storage.from_(self.bucket).upload(path, data)
+        ctype = (
+            getattr(content, "content_type", None)
+            or mimetypes.guess_type(path)[0]
+            or "application/octet-stream"
+        )
+        # Prefer upload; if it already exists, remove then upload
+        storage = client.storage.from_(self.bucket)
+        try:
+            storage.upload(path, data)
+        except Exception:  # noqa: BLE001
+            try:
+                storage.remove([path])
+            except Exception:  # noqa: BLE001
+                pass
+            storage.upload(path, data)
         return name
 
     def exists(self, name: str) -> bool:
@@ -117,4 +129,4 @@ class SupabaseMediaStorage(Storage):
 
     def get_accessed_time(self, name: str):
         return timezone.now()
-        for it in items:
+
