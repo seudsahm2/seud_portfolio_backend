@@ -16,6 +16,9 @@ from .serializers import (
     KnowledgeDocumentSerializer,
     ChatLogSerializer,
     ChatAskSerializer,
+    KnowledgeSourcesSerializer,
+    KnowledgeIngestRequestSerializer,
+    KnowledgeIngestResponseSerializer,
 )
 from .tasks import send_contact_email
 from django.db import transaction
@@ -39,24 +42,28 @@ class ProjectViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["featured", "skills__name"]
     search_fields = ["title", "description"]
+    ordering_fields = ["created_at", "title", "id"]
 
 class ExperienceViewSet(viewsets.ModelViewSet):
     queryset = Experience.objects.all()
     serializer_class = ExperienceSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["company", "role"]
+    ordering_fields = ["start_date", "end_date", "id"]
 
 class SkillViewSet(viewsets.ModelViewSet):
     queryset = Skill.objects.all()
     serializer_class = SkillSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["name"]
+    ordering_fields = ["level", "name", "id"]
 
 class BlogPostViewSet(viewsets.ModelViewSet):
     queryset = BlogPost.objects.all()
     serializer_class = BlogPostSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["title", "slug", "summary"]
+    ordering_fields = ["published_at", "id"]
 
 
 class ContactThrottle(ScopedRateThrottle):
@@ -80,7 +87,7 @@ class ContactView(APIView):
 class KnowledgeRefreshView(APIView):
     permission_classes = [AllowAny]
 
-    @extend_schema(responses={200: KnowledgeDocumentSerializer(many=True)})
+    @extend_schema(request=None, responses={200: KnowledgeDocumentSerializer(many=True)})
     def post(self, request):
         docs = []
         with transaction.atomic():
@@ -206,6 +213,7 @@ class ChatAskView(APIView):
 class KnowledgeSourcesView(APIView):
     permission_classes = [AllowAny]
 
+    @extend_schema(responses={200: KnowledgeSourcesSerializer})
     def get(self, request):
         total = KnowledgeDocument.objects.count()
         prefixes = ["profile", "project:", "skill:", "blog:", "experience:", "github_code:"]
@@ -288,6 +296,7 @@ class GitHubReposJSONView(APIView):
 class GitHubReposHTMLView(APIView):
     permission_classes = [AllowAny]
 
+    @extend_schema(exclude=True)
     def get(self, request):
         username = request.GET.get("username")
         include_private = request.GET.get("include_private") in {"1", "true", "True", "yes"}
@@ -319,7 +328,8 @@ class KnowledgeIngestCodeView(APIView):
         description="Ingest actual GitHub repo code into KnowledgeDocument."
         " Body: { repos: [\"owner/repo\"... ] | optional, username: string | optional, include_private: bool | optional }."
         " If repos not provided, uses username (or include_private=1 to use authenticated user) to list repos.",
-        responses={200: KnowledgeDocumentSerializer(many=True)}
+        request=KnowledgeIngestRequestSerializer,
+        responses={200: KnowledgeIngestResponseSerializer},
     )
     def post(self, request):
         body = request.data or {}

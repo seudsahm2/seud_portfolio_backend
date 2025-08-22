@@ -18,6 +18,9 @@ class Skill(models.Model):
     def __str__(self):
         return f"{self.name} ({self.level})"
 
+    class Meta:
+        ordering = ["-level", "name", "id"]
+
 class Project(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
@@ -33,6 +36,9 @@ class Project(models.Model):
     def __str__(self):
         return self.title
 
+    class Meta:
+        ordering = ["-created_at", "title", "-id"]
+
 class Experience(models.Model):
     company = models.CharField(max_length=200)
     role = models.CharField(max_length=200)
@@ -42,6 +48,9 @@ class Experience(models.Model):
 
     def __str__(self):
         return f"{self.role} @ {self.company}"
+
+    class Meta:
+        ordering = ["-start_date", "-end_date", "-id"]
 
 class BlogPost(models.Model):
     title = models.CharField(max_length=200)
@@ -54,6 +63,9 @@ class BlogPost(models.Model):
 
     def __str__(self):
         return self.title
+
+    class Meta:
+        ordering = ["-published_at", "-id"]
 
 
 class KnowledgeDocument(models.Model):

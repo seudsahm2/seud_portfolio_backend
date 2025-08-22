@@ -55,3 +55,20 @@ class ChatAskSerializer(serializers.Serializer):
     structured = serializers.BooleanField(required=False, default=True)
     top_n = serializers.IntegerField(required=False, min_value=1, max_value=20, default=6)
 
+class KnowledgeSourcesSerializer(serializers.Serializer):
+    total = serializers.IntegerField()
+    counts = serializers.DictField(child=serializers.IntegerField())
+    github_code_samples = serializers.ListField(child=serializers.CharField())
+
+
+class KnowledgeIngestRequestSerializer(serializers.Serializer):
+    # Either provide explicit repos (owner/name) or set username/include_private
+    repos = serializers.ListField(child=serializers.CharField(), required=False)
+    username = serializers.CharField(required=False, allow_blank=True)
+    include_private = serializers.BooleanField(required=False, default=False)
+
+
+class KnowledgeIngestResponseSerializer(serializers.Serializer):
+    ingested = KnowledgeDocumentSerializer(many=True)
+    ingested_count = serializers.IntegerField()
+    skipped = serializers.IntegerField()

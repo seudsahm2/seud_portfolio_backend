@@ -24,7 +24,7 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+from drf_spectacular.views import SpectacularAPIView, SpectacularJSONAPIView,SpectacularSwaggerView
 from portfolio import views as portfolio_views
 from django.conf import settings
 from django.conf.urls.static import static
@@ -50,7 +50,6 @@ urlpatterns = [
             }
         ),
     ),
-    path("api/", include(router.urls)),
     path("api/contact", portfolio_views.ContactView.as_view(), name="contact"),
     path("api/knowledge/refresh", portfolio_views.KnowledgeRefreshView.as_view(), name="knowledge-refresh"),
     path("api/chat/ask", portfolio_views.ChatAskView.as_view(), name="chat-ask"),
@@ -61,7 +60,9 @@ urlpatterns = [
     path("api/auth/jwt/create", TokenObtainPairView.as_view(), name="jwt-create"),
     path("api/auth/jwt/refresh", TokenRefreshView.as_view(), name="jwt-refresh"),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+    path("api/schema/json/", SpectacularJSONAPIView.as_view(), name="schema-json"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="docs"),
+    path("api/", include(router.urls)),
 ]
 
 if settings.DEBUG:
