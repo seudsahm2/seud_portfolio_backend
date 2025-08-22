@@ -318,8 +318,12 @@ SIMPLE_JWT = {
 }
 
 # Supabase storage (used for media in production; local files in dev)
-SUPABASE_URL = config("SUPABASE_URL", default="")
+# Distinguish the project API URL from any DB URLs. Prefer SUPABASE_PROJECT_URL, else use SUPABASE_URL if it looks like https.
+_SUPABASE_PROJECT_URL_RAW = config("SUPABASE_PROJECT_URL", default=config("SUPABASE_URL", default=""))
+SUPABASE_PROJECT_URL = _SUPABASE_PROJECT_URL_RAW if str(_SUPABASE_PROJECT_URL_RAW).startswith("http") else ""
 SUPABASE_ANON_KEY = config("SUPABASE_ANON_KEY", default="")
+# Prefer service role key for server-side uploads if provided; accept SUPABASE_SERVICE_KEY alias
+SUPABASE_SERVICE_ROLE_KEY = config("SUPABASE_SERVICE_ROLE_KEY", default=config("SUPABASE_SERVICE_KEY", default=""))
 SUPABASE_BUCKET = config("SUPABASE_BUCKET", default="media")
 
 # S3/Compatible storage for media in production (recommended on Render)
@@ -342,6 +346,10 @@ if AWS_STORAGE_BUCKET_NAME:
         MEDIA_URL = f"{_endpoint_str}/{AWS_STORAGE_BUCKET_NAME}/"
     else:
         MEDIA_URL = f"https://{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com/"
+elif SUPABASE_PROJECT_URL and SUPABASE_BUCKET:
+    # Use Supabase storage for media
+    DEFAULT_FILE_STORAGE = "portfolio.storage_backends.SupabaseMediaStorage"
+    MEDIA_URL = f"{str(SUPABASE_PROJECT_URL).rstrip('/')}/storage/v1/object/public/{SUPABASE_BUCKET}/"
 
 # Redis cache (used also by Celery if configured)
 REDIS_URL = config("REDIS_URL", default="redis://127.0.0.1:6379/0")
