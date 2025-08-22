@@ -29,7 +29,17 @@ SECRET_KEY = config("SECRET_KEY", default="dev-secret-key")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config("DEBUG", default=True, cast=bool)
 
-ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
+_ALLOWED_HOSTS_RAW = config("ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
+if isinstance(_ALLOWED_HOSTS_RAW, (list, tuple)):
+    ALLOWED_HOSTS = list(_ALLOWED_HOSTS_RAW)
+elif isinstance(_ALLOWED_HOSTS_RAW, str):
+    ALLOWED_HOSTS = [_ALLOWED_HOSTS_RAW]
+else:
+    ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+# Auto-include Render external hostname if present
+RENDER_EXTERNAL_HOSTNAME = os.getenv("RENDER_EXTERNAL_HOSTNAME") or ""
+if RENDER_EXTERNAL_HOSTNAME and RENDER_EXTERNAL_HOSTNAME not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
 
 # Application definition
@@ -56,6 +66,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -88,7 +99,7 @@ WSGI_APPLICATION = "seud_portfolio_backend.wsgi.application"
 # Database
 # Prefer Supabase Postgres via DATABASE_URL or discrete env vars; fallback to SQLite.
 # For Supabase pgbouncer (transaction mode), Django should avoid persistent connections and server-side cursors.
-DATABASE_URL = config("DATABASE_URL", default="")
+DATABASE_URL = str(config("DATABASE_URL", default=""))
 
 def _pg_from_url(url: str):
     p = urlparse(url)
@@ -171,6 +182,9 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+# Serve compressed, versioned static files
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
@@ -209,22 +223,69 @@ CORS_ALLOWED_ORIGINS_RAW = config(
     "CORS_ALLOWED_ORIGINS", default="http://localhost:3000", cast=Csv()
 )
 
-def _normalize_origin(o: str) -> str:
-    o = o.strip().rstrip("/")
-    if not o:
-        return o
-    parsed = urlparse(o)
+def _normalize_origin(value: str) -> str:
+    s = value.strip().rstrip("/")
+    if not s:
+        return s
+    parsed = urlparse(s)
     if parsed.scheme and parsed.netloc:
         return f"{parsed.scheme}://{parsed.netloc}"
-    return o
+    return s
 
-CORS_ALLOWED_ORIGINS = list({ _normalize_origin(o) for o in CORS_ALLOWED_ORIGINS_RAW if _normalize_origin(o) })
+# Build CORS_ALLOWED_ORIGINS safely
+if not isinstance(CORS_ALLOWED_ORIGINS_RAW, (list, tuple)):
+    CORS_ALLOWED_ORIGINS_RAW = [str(CORS_ALLOWED_ORIGINS_RAW)] if CORS_ALLOWED_ORIGINS_RAW else []
+CORS_ALLOWED_ORIGINS = []
+_cors_set = set()
+for orig_val in CORS_ALLOWED_ORIGINS_RAW:
+    _n = _normalize_origin(orig_val)
+    if _n:
+        _cors_set.add(_n)
+CORS_ALLOWED_ORIGINS = list(_cors_set)
 CORS_ALLOW_CREDENTIALS = True
+
+# CSRF trusted origins (include frontends and render host)
+CSRF_TRUSTED_ORIGINS_RAW = config("CSRF_TRUSTED_ORIGINS", default="", cast=Csv())
+# Ensure iterable (Csv() returns a list for strings; guard odd cases/types)
+if not isinstance(CSRF_TRUSTED_ORIGINS_RAW, (list, tuple)):
+    CSRF_TRUSTED_ORIGINS_RAW = [str(CSRF_TRUSTED_ORIGINS_RAW)] if CSRF_TRUSTED_ORIGINS_RAW else []
+# Build CSRF_TRUSTED_ORIGINS by normalizing provided origins and ensuring https variants
+_csrf_set = set()
+for _o in CSRF_TRUSTED_ORIGINS_RAW:
+    _n = _normalize_origin(_o)
+    if not _n:
+        continue
+    _csrf_set.add(_n)
+    # Add https variant if http is provided (common for local dev -> prod)
+    if _n.startswith("http://"):
+        _csrf_set.add(_n.replace("http://", "https://", 1))
+CSRF_TRUSTED_ORIGINS = list(_csrf_set)
+if RENDER_EXTERNAL_HOSTNAME:
+    CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_EXTERNAL_HOSTNAME}")
+for orig_val in CORS_ALLOWED_ORIGINS:
+    # Add matching https origin for CSRF if not present
+    if orig_val.startswith("http://"):
+        CSRF_TRUSTED_ORIGINS.append(orig_val.replace("http://", "https://", 1))
+    else:
+        CSRF_TRUSTED_ORIGINS.append(orig_val)
+CSRF_TRUSTED_ORIGINS = list({u for u in CSRF_TRUSTED_ORIGINS if u})
 
 # Basic security headers (safe defaults for dev; review for production)
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 X_FRAME_OPTIONS = "DENY"
+
+# Trust X-Forwarded-Proto from proxy (Render)
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    # Enable HSTS (start with lower value; raise once confirmed)
+    SECURE_HSTS_SECONDS = config("SECURE_HSTS_SECONDS", default=3600, cast=int)
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
 
 # SimpleJWT
 SIMPLE_JWT = {
@@ -261,6 +322,27 @@ SUPABASE_URL = config("SUPABASE_URL", default="")
 SUPABASE_ANON_KEY = config("SUPABASE_ANON_KEY", default="")
 SUPABASE_BUCKET = config("SUPABASE_BUCKET", default="media")
 
+# S3/Compatible storage for media in production (recommended on Render)
+AWS_ACCESS_KEY_ID = config("AWS_ACCESS_KEY_ID", default="")
+AWS_SECRET_ACCESS_KEY = config("AWS_SECRET_ACCESS_KEY", default="")
+AWS_STORAGE_BUCKET_NAME = config("AWS_S3_BUCKET_NAME", default="")
+AWS_S3_REGION_NAME = config("AWS_S3_REGION_NAME", default="")
+AWS_S3_ENDPOINT_URL = config("AWS_S3_ENDPOINT_URL", default="")  # optional for R2/DO Spaces
+if AWS_STORAGE_BUCKET_NAME:
+    DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+    AWS_QUERYSTRING_AUTH = False
+    AWS_S3_FILE_OVERWRITE = False
+    AWS_DEFAULT_ACL = None
+    AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "max-age=86400"}
+    if AWS_S3_ENDPOINT_URL:
+        AWS_S3_SIGNATURE_VERSION = "s3v4"
+    # Media URL from bucket (Render has no persistent disk)
+    if AWS_S3_ENDPOINT_URL:
+        _endpoint_str = f"{AWS_S3_ENDPOINT_URL}".rstrip("/")
+        MEDIA_URL = f"{_endpoint_str}/{AWS_STORAGE_BUCKET_NAME}/"
+    else:
+        MEDIA_URL = f"https://{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com/"
+
 # Redis cache (used also by Celery if configured)
 REDIS_URL = config("REDIS_URL", default="redis://127.0.0.1:6379/0")
 CACHES = {
@@ -291,3 +373,24 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 if os.name == "nt":  # Windows prefers solo pool
     CELERY_WORKER_POOL = "solo"
+
+# Logging to stdout (12-factor)
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "simple": {"format": "%(asctime)s %(levelname)s %(name)s: %(message)s"},
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "simple",
+        }
+    },
+    "root": {"handlers": ["console"], "level": "INFO"},
+    "loggers": {
+        "django": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "django.request": {"handlers": ["console"], "level": "WARNING", "propagate": False},
+        "django.security": {"handlers": ["console"], "level": "WARNING", "propagate": False},
+    },
+}

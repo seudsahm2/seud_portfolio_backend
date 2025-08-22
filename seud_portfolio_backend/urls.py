@@ -39,6 +39,7 @@ router.register(r'blogposts', portfolio_views.BlogPostViewSet)
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/health", lambda request: JsonResponse({"status": "ok"})),
+    path("healthz", lambda request: JsonResponse({"ok": True})),
     path(
         "api/info",
         lambda request: JsonResponse(
