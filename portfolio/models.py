@@ -1,6 +1,7 @@
 from django.db import models
 from django.core.files.storage import default_storage
-from .storage_backends import SupabaseMediaStorage
+from django.utils.module_loading import import_string
+SupabaseMediaStorage = import_string('portfolio.storage_backends.SupabaseMediaStorage')
 
 class Profile(models.Model):
     full_name = models.CharField(max_length=120)

@@ -6,6 +6,7 @@ from django.conf import settings
 from django.core.files.base import File
 from django.core.files.storage import Storage
 from django.utils import timezone
+from django.utils.deconstruct import deconstructible
 
 try:
     from supabase import create_client  # type: ignore
@@ -32,6 +33,7 @@ def _get_client():
     return _supabase_client
 
 
+@deconstructible
 class SupabaseMediaStorage(Storage):
     """Django Storage backend for Supabase Storage public buckets."""
 
@@ -44,6 +46,10 @@ class SupabaseMediaStorage(Storage):
         if not base:
             raise RuntimeError("SUPABASE_PROJECT_URL (or SUPABASE_URL) must be set to project API URL")
         self.public_base = f"{base.rstrip('/')}/storage/v1/object/public/{self.bucket}"
+
+    # Ensure Django migrations can serialize this storage instance
+    def deconstruct(self):  # pragma: no cover
+        return ("portfolio.storage_backends.SupabaseMediaStorage", [], {})
 
     def _full_path(self, name: str) -> str:
         return name.lstrip("/")
