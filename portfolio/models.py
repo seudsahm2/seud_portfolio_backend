@@ -1,4 +1,6 @@
 from django.db import models
+from django.core.files.storage import default_storage
+from .storage_backends import SupabaseMediaStorage
 
 class Profile(models.Model):
     full_name = models.CharField(max_length=120)
@@ -30,11 +32,29 @@ class Project(models.Model):
     featured = models.BooleanField(default=False)
     created_at = models.DateField(null=True, blank=True)
     # Local dev image storage; when using Supabase we store the path/URL
-    image = models.ImageField(upload_to="projects/", blank=True, null=True)
+    image = models.ImageField(upload_to="projects/", storage=SupabaseMediaStorage(), blank=True, null=True)
     image_url = models.URLField(blank=True)
 
     def __str__(self):
         return self.title
+
+    def save(self, *args, **kwargs):
+        # First save to ensure the file is uploaded via the active storage backend
+        super().save(*args, **kwargs)
+        # If an image exists, ensure image_url reflects the storage URL (Supabase when configured)
+        new_url = None
+        if self.image:
+            try:
+                new_url = self.image.url
+            except Exception:  # best-effort; keep existing
+                try:
+                    from django.conf import settings as _s
+                    if self.image.name and getattr(_s, "MEDIA_URL", ""):
+                        new_url = f"{_s.MEDIA_URL.rstrip('/')}/{self.image.name}"
+                except Exception:
+                    new_url = None
+        if new_url and new_url != self.image_url:
+            type(self).objects.filter(pk=self.pk).update(image_url=new_url)
 
     class Meta:
         ordering = ["-created_at", "title", "-id"]
@@ -58,11 +78,27 @@ class BlogPost(models.Model):
     summary = models.TextField(blank=True)
     content = models.TextField(blank=True)
     published_at = models.DateTimeField(auto_now_add=True)
-    cover_image = models.ImageField(upload_to="blog/", blank=True, null=True)
+    cover_image = models.ImageField(upload_to="blog/", storage=SupabaseMediaStorage(), blank=True, null=True)
     cover_image_url = models.URLField(blank=True)
 
     def __str__(self):
         return self.title
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        new_url = None
+        if self.cover_image:
+            try:
+                new_url = self.cover_image.url
+            except Exception:
+                try:
+                    from django.conf import settings as _s
+                    if self.cover_image.name and getattr(_s, "MEDIA_URL", ""):
+                        new_url = f"{_s.MEDIA_URL.rstrip('/')}/{self.cover_image.name}"
+                except Exception:
+                    new_url = None
+        if new_url and new_url != self.cover_image_url:
+            type(self).objects.filter(pk=self.pk).update(cover_image_url=new_url)
 
     class Meta:
         ordering = ["-published_at", "-id"]

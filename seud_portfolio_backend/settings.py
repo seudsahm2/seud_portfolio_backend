@@ -174,16 +174,11 @@ USE_I18N = True
 USE_TZ = True
 
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.2/howto/static-files/
-
+# Static & media files
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
-
-# Serve compressed, versioned static files
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -340,8 +335,18 @@ AWS_SECRET_ACCESS_KEY = config("AWS_SECRET_ACCESS_KEY", default="")
 AWS_STORAGE_BUCKET_NAME = config("AWS_S3_BUCKET_NAME", default="")
 AWS_S3_REGION_NAME = config("AWS_S3_REGION_NAME", default="")
 AWS_S3_ENDPOINT_URL = config("AWS_S3_ENDPOINT_URL", default="")  # optional for R2/DO Spaces
+STORAGES = {
+    # WhiteNoise for static files
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    }
+}
+
 if AWS_STORAGE_BUCKET_NAME:
-    DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+    # Default storage -> S3
+    STORAGES["default"] = {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+    }
     AWS_QUERYSTRING_AUTH = False
     AWS_S3_FILE_OVERWRITE = False
     AWS_DEFAULT_ACL = None
@@ -355,9 +360,13 @@ if AWS_STORAGE_BUCKET_NAME:
     else:
         MEDIA_URL = f"https://{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com/"
 elif SUPABASE_PROJECT_URL and SUPABASE_BUCKET:
-    # Use Supabase storage for media
-    DEFAULT_FILE_STORAGE = "portfolio.storage_backends.SupabaseMediaStorage"
+    # Default storage -> Supabase
+    STORAGES["default"] = {
+        "BACKEND": "portfolio.storage_backends.SupabaseMediaStorage",
+    }
     MEDIA_URL = f"{str(SUPABASE_PROJECT_URL).rstrip('/')}/storage/v1/object/public/{SUPABASE_BUCKET}/"
+    # Back-compat/fallback for code-paths that still read DEFAULT_FILE_STORAGE
+    DEFAULT_FILE_STORAGE = "portfolio.storage_backends.SupabaseMediaStorage"
 
 # Redis cache (used also by Celery if configured)
 REDIS_URL = config("REDIS_URL", default="redis://127.0.0.1:6379/0")

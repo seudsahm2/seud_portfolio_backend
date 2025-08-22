@@ -14,7 +14,7 @@ class SkillAdmin(admin.ModelAdmin):
 
 @admin.register(Project)
 class ProjectAdmin(admin.ModelAdmin):
-    list_display = ("title", "featured")
+    list_display = ("title", "featured", "image_url")
     list_filter = ("featured",)
     search_fields = ("title", "description")
 
@@ -25,7 +25,7 @@ class ExperienceAdmin(admin.ModelAdmin):
 
 @admin.register(BlogPost)
 class BlogPostAdmin(admin.ModelAdmin):
-    list_display = ("title", "slug", "published_at")
+    list_display = ("title", "slug", "published_at", "cover_image_url")
     search_fields = ("title", "slug", "summary")
     prepopulated_fields = {"slug": ("title",)}
 

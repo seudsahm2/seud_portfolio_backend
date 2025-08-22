@@ -11,6 +11,11 @@ import os
 
 from django.core.asgi import get_asgi_application
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "seud_portfolio_backend.settings")
+# Sanitize existing value first, else set default
+_existing = os.environ.get("DJANGO_SETTINGS_MODULE")
+if _existing:
+	os.environ["DJANGO_SETTINGS_MODULE"] = _existing.strip()
+else:
+	os.environ.setdefault("DJANGO_SETTINGS_MODULE", "seud_portfolio_backend.settings")
 
 application = get_asgi_application()
