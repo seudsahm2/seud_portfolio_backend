@@ -95,7 +95,42 @@ def _try_parse_json(text: str) -> Optional[dict]:
     return best_obj
 
 
-def ask_google(question: str, knowledge: str, model: str = "gemini-1.5-flash", max_tokens: int | None = 512, system_vars: dict | None = None, structured: bool = True) -> AIResponse:
+DEFAULT_GEMINI_MODEL = os.getenv("GOOGLE_GEMINI_MODEL", "gemini-1.5-flash")
+
+def _select_fallback_gemini(genai_module) -> str:
+    """Fetch available models and pick a suitable flash model that supports generateContent.
+
+    Preference order:
+    - *flash* latest
+    - *pro* latest (if flash unavailable)
+    - first model with generateContent capability
+    """
+    try:
+        models = list(getattr(genai_module, "list_models")())
+    except Exception:
+        return "gemini-1.5-flash-001"  # conservative static fallback
+    # Normalize models to dict-like
+    def supports(m, method: str) -> bool:
+        caps = getattr(m, "supported_generation_methods", []) or getattr(m, "generation_methods", [])
+        return method in caps
+    flash_candidates = [m for m in models if "flash" in getattr(m, "name", "") and supports(m, "generateContent")]
+    if flash_candidates:
+        # Prefer one with 'latest' or highest suffix
+        for preferred in ("latest", "flash-latest"):
+            for m in flash_candidates:
+                if preferred in getattr(m, "name", ""):
+                    return m.name
+        # else first flash
+        return flash_candidates[0].name
+    pro_candidates = [m for m in models if "pro" in getattr(m, "name", "") and supports(m, "generateContent")]
+    if pro_candidates:
+        return pro_candidates[0].name
+    any_candidate = [m for m in models if supports(m, "generateContent")]
+    if any_candidate:
+        return any_candidate[0].name
+    return "gemini-1.5-flash-001"
+
+def ask_google(question: str, knowledge: str, model: str = DEFAULT_GEMINI_MODEL, max_tokens: int | None = 512, system_vars: dict | None = None, structured: bool = True) -> AIResponse:
     if not genai:
         raise RuntimeError("google-generativeai not installed")
     api_key = getattr(settings, "GOOGLE_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
@@ -104,7 +139,17 @@ def ask_google(question: str, knowledge: str, model: str = "gemini-1.5-flash", m
     genai.configure(api_key=api_key)
     sys_prompt = build_system_prompt(system_vars)
     context = _truncate_context(knowledge)
-    model_obj = genai.GenerativeModel(model)
+    # Attempt to create requested model; fallback if missing
+    try:
+        model_obj = genai.GenerativeModel(model)
+    except Exception as e:
+        msg = str(e)
+        if "not found" in msg.lower() or "unsupported" in msg.lower():
+            fallback = _select_fallback_gemini(genai)
+            model_obj = genai.GenerativeModel(fallback)
+            model = fallback  # use new model name for response
+        else:
+            raise
     messages = [
         {"role": "user", "parts": [f"System Instructions:\n{sys_prompt}"]},
         {"role": "user", "parts": [f"Knowledge Context:\n{context}"]},
