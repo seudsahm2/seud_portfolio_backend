@@ -381,15 +381,32 @@ elif SUPABASE_PROJECT_URL and SUPABASE_BUCKET:
     # Back-compat/fallback for code-paths that still read DEFAULT_FILE_STORAGE
     DEFAULT_FILE_STORAGE = "portfolio.storage_backends.SupabaseMediaStorage"
 
-# Redis cache (used also by Celery if configured)
+# Cache configuration (Redis in prod; LocMem in dev by default)
 REDIS_URL = config("REDIS_URL", default="redis://127.0.0.1:6379/0")
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": REDIS_URL,
-        "TIMEOUT": 300,
+_use_redis_cfg = str(config("USE_REDIS_CACHE", default="auto")).strip().lower()
+if _use_redis_cfg not in {"true", "false", "auto"}:
+    _use_redis_cfg = "auto"
+USE_REDIS_CACHE = (
+    True if _use_redis_cfg == "true" else False if _use_redis_cfg == "false" else not DEBUG
+)
+
+if USE_REDIS_CACHE:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_URL,
+            "TIMEOUT": 300,
+        }
     }
-}
+else:
+    # Local in-memory cache to avoid external dependency during development
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "portfolio-dev-cache",
+            "TIMEOUT": 300,
+        }
+    }
 
 # Email (console in dev)
 EMAIL_BACKEND = config(
@@ -406,7 +423,7 @@ GITHUB_TOKEN = config("GITHUB_TOKEN", default="")
 # Celery
 CELERY_BROKER_URL = config("CELERY_BROKER_URL", default=REDIS_URL)
 CELERY_RESULT_BACKEND = config("CELERY_RESULT_BACKEND", default="django-db")
-CELERY_TASK_ALWAYS_EAGER = config("CELERY_TASK_ALWAYS_EAGER", default=False, cast=bool)
+CELERY_TASK_ALWAYS_EAGER = config("CELERY_TASK_ALWAYS_EAGER", default=DEBUG, cast=bool)
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 if os.name == "nt":  # Windows prefers solo pool
