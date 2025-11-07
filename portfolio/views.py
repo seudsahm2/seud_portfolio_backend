@@ -196,14 +196,16 @@ class ChatAskView(APIView):
                 "top_n": top_n,
             }
             res = ai_ask(provider, question, knowledge, model=model, max_tokens=max_tokens, system_vars=system_vars, structured=structured)
-            log.answer = res.text
+            log.answer = res.text or "(empty answer)"
             log.answer_json = dict(res.data) if isinstance(res.data, dict) else None
             log.tokens_prompt = res.tokens_prompt
             log.tokens_completion = res.tokens_completion
             log.status = "ok"
         except Exception as e:
+            # Provide a user-visible fallback answer instead of leaving blank
             log.status = "error"
             log.error = str(e)
+            log.answer = f"AI provider error: {e}. Please check API keys or try again later."
         finally:
             dur = timezone.now() - started
             log.latency_ms = int(dur.total_seconds() * 1000)
