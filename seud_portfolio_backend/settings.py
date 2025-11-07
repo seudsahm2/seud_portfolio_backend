@@ -215,7 +215,9 @@ SPECTACULAR_SETTINGS = {
 
 # CORS
 CORS_ALLOWED_ORIGINS_RAW = config(
-    "CORS_ALLOWED_ORIGINS", default="http://localhost:3000", cast=Csv()
+    "CORS_ALLOWED_ORIGINS",
+    default="http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001",
+    cast=Csv(),
 )
 
 def _normalize_origin(value: str) -> str:
@@ -238,6 +240,17 @@ for orig_val in CORS_ALLOWED_ORIGINS_RAW:
         _cors_set.add(_n)
 CORS_ALLOWED_ORIGINS = list(_cors_set)
 CORS_ALLOW_CREDENTIALS = True
+
+# Optional override: allow all origins in dev if explicitly enabled
+CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", default=False, cast=bool)
+
+# In DEBUG, automatically inject common frontend dev ports if not already present
+if DEBUG and not CORS_ALLOW_ALL_ORIGINS:
+    for _port in (3000, 3001, 3002):
+        for _host in ("localhost", "127.0.0.1"):
+            _origin = f"http://{_host}:{_port}"
+            if _origin not in CORS_ALLOWED_ORIGINS:
+                CORS_ALLOWED_ORIGINS.append(_origin)
 
 # CSRF trusted origins (include frontends and render host)
 CSRF_TRUSTED_ORIGINS_RAW = config("CSRF_TRUSTED_ORIGINS", default="", cast=Csv())

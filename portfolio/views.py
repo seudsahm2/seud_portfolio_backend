@@ -1,5 +1,5 @@
 from rest_framework import viewsets, filters, status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle, ScopedRateThrottle
@@ -85,7 +85,8 @@ class ContactView(APIView):
 
 
 class KnowledgeRefreshView(APIView):
-    permission_classes = [AllowAny]
+    # Admin-only: rebuilds knowledge base from DB
+    permission_classes = [IsAdminUser]
 
     @extend_schema(request=None, responses={200: KnowledgeDocumentSerializer(many=True)})
     def post(self, request):
@@ -322,7 +323,8 @@ class GitHubReposHTMLView(APIView):
 
 
 class KnowledgeIngestCodeView(APIView):
-    permission_classes = [AllowAny]
+    # Admin-only: pulls code from GitHub and stores in DB
+    permission_classes = [IsAdminUser]
 
     @extend_schema(
         description="Ingest actual GitHub repo code into KnowledgeDocument."
