@@ -1,5 +1,16 @@
 from rest_framework import serializers
-from .models import Profile, Project, Experience, Skill, BlogPost, KnowledgeDocument, ChatLog
+from .models import (
+    Profile,
+    Project,
+    Experience,
+    Skill,
+    BlogPost,
+    BlogSeries,
+    BlogComment,
+    BlogSubscription,
+    KnowledgeDocument,
+    ChatLog,
+)
 from django.contrib.auth import get_user_model
 User = get_user_model()
 
@@ -150,6 +161,42 @@ class BlogPostSerializer(serializers.ModelSerializer):
     class Meta:
         model = BlogPost
         fields = "__all__"
+
+
+class BlogSeriesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BlogSeries
+        fields = "__all__"
+
+
+class BlogCommentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BlogComment
+        fields = [
+            "id",
+            "post",
+            "parent",
+            "name",
+            "email",
+            "content",
+            "rendered_html",
+            "is_approved",
+            "is_deleted",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["rendered_html", "is_approved", "is_deleted", "created_at", "updated_at"]
+
+
+class BlogSubscriptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BlogSubscription
+        fields = [
+            "email",
+            "verified",
+            "active",
+        ]
+        read_only_fields = ["verified", "active"]
 
 
 class ContactSerializer(serializers.Serializer):

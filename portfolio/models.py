@@ -3,6 +3,7 @@ from django.core.files.storage import default_storage
 from django.utils.module_loading import import_string
 from django.conf import settings
 from django.core.exceptions import ValidationError
+import uuid
 SupabaseMediaStorage = import_string('portfolio.storage_backends.SupabaseMediaStorage')
 
 class Profile(models.Model):
@@ -193,9 +194,89 @@ class BlogPost(models.Model):
     slug = models.SlugField(unique=True)
     summary = models.TextField(blank=True)
     content = models.TextField(blank=True)
+    content_format = models.CharField(max_length=20, blank=True, default="markdown")
+    language = models.CharField(max_length=10, blank=True)
+    status = models.CharField(max_length=20, blank=True, default="published", help_text="draft|published|archived")
     published_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    excerpt = models.TextField(blank=True)
+    table_of_contents = models.JSONField(default=list, blank=True)
+    reading_time = models.PositiveSmallIntegerField(default=0)
+    tags = models.JSONField(default=list, blank=True)
+    views_count = models.PositiveIntegerField(default=0)
+    likes_count = models.PositiveIntegerField(default=0)
+    bookmarks_count = models.PositiveIntegerField(default=0)
+    comments_count = models.PositiveIntegerField(default=0)
+    allow_comments = models.BooleanField(default=True)
+    featured = models.BooleanField(default=False)
+    pinned_order = models.SmallIntegerField(default=0)
+    seo_title = models.CharField(max_length=200, blank=True)
+    seo_description = models.CharField(max_length=300, blank=True)
+    canonical_url = models.URLField(blank=True)
+    og_image_url = models.URLField(blank=True)
+    # Media
     cover_image = models.ImageField(upload_to="blog/", storage=SupabaseMediaStorage(), blank=True, null=True)
     cover_image_url = models.URLField(blank=True)
+    # Series (optional)
+    # defined below after BlogSeries class
+
+    def __str__(self):
+        return self.title
+
+    def save(self, *args, **kwargs):
+        # Derive excerpt and reading_time if not set
+        content_text = self.content or ""
+        if not self.excerpt:
+            self.excerpt = (content_text[:300] + ("..." if len(content_text) > 300 else ""))
+        if not self.reading_time:
+            # Roughly 220 wpm
+            import re, math
+            words = re.findall(r"\w+", content_text)
+            self.reading_time = max(1, math.ceil(len(words) / 220)) if words else 1
+        # Basic markdown TOC (H1-H3)
+        if self.content_format == "markdown" and not self.table_of_contents:
+            import re
+            toc = []
+            for line in content_text.splitlines():
+                if line.startswith("#"):
+                    level = len(line) - len(line.lstrip('#'))
+                    if level in (1, 2, 3):
+                        text = line.lstrip('#').strip()
+                        slug = re.sub(r"[^a-z0-9\- ]", "", text.lower()).replace(" ", "-")
+                        toc.append({"id": slug[:80], "text": text, "level": level})
+            self.table_of_contents = toc
+
+        super().save(*args, **kwargs)
+        # Ensure cover_image_url reflects storage URL
+        new_url = None
+        if self.cover_image:
+            try:
+                new_url = self.cover_image.url
+            except Exception:
+                try:
+                    from django.conf import settings as _s
+                    if self.cover_image.name and getattr(_s, "MEDIA_URL", ""):
+                        new_url = f"{_s.MEDIA_URL.rstrip('/')}/{self.cover_image.name}"
+                except Exception:
+                    new_url = None
+        if new_url and new_url != self.cover_image_url:
+            type(self).objects.filter(pk=self.pk).update(cover_image_url=new_url)
+
+    class Meta:
+        ordering = ["-published_at", "-id"]
+
+
+class BlogSeries(models.Model):
+    title = models.CharField(max_length=200)
+    slug = models.SlugField(unique=True)
+    description = models.TextField(blank=True)
+    order = models.SmallIntegerField(default=0)
+    published = models.BooleanField(default=True)
+    cover_image = models.ImageField(upload_to="blog/series/", storage=SupabaseMediaStorage(), blank=True, null=True)
+    cover_image_url = models.URLField(blank=True)
+
+    class Meta:
+        ordering = ["order", "title", "id"]
 
     def __str__(self):
         return self.title
@@ -216,8 +297,62 @@ class BlogPost(models.Model):
         if new_url and new_url != self.cover_image_url:
             type(self).objects.filter(pk=self.pk).update(cover_image_url=new_url)
 
+
+# Add series relation on BlogPost after BlogSeries is defined
+BlogPost.add_to_class('series', models.ForeignKey(BlogSeries, on_delete=models.SET_NULL, null=True, blank=True))
+
+
+class BlogComment(models.Model):
+    post = models.ForeignKey(BlogPost, on_delete=models.CASCADE, related_name="comments")
+    parent = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name="replies")
+    name = models.CharField(max_length=120)
+    email = models.EmailField(blank=True)
+    content = models.TextField()
+    rendered_html = models.TextField(blank=True)
+    is_approved = models.BooleanField(default=True)
+    is_deleted = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
-        ordering = ["-published_at", "-id"]
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"Comment by {self.name} on {self.post.title}"
+
+
+class BlogLike(models.Model):
+    post = models.ForeignKey(BlogPost, on_delete=models.CASCADE, related_name="likes")
+    fingerprint = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["post", "fingerprint"], name="unique_like_per_fingerprint")
+        ]
+
+
+class BlogBookmark(models.Model):
+    post = models.ForeignKey(BlogPost, on_delete=models.CASCADE, related_name="bookmarks")
+    fingerprint = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["post", "fingerprint"], name="unique_bookmark_per_fingerprint")
+        ]
+
+
+class BlogSubscription(models.Model):
+    email = models.EmailField(unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    verified = models.BooleanField(default=False)
+    active = models.BooleanField(default=True)
+    verify_token = models.UUIDField(default=uuid.uuid4, editable=False)
+    unsub_token = models.UUIDField(default=uuid.uuid4, editable=False)
+
+    def __str__(self):
+        return f"Subscription: {self.email} ({'active' if self.active else 'inactive'})"
 
 
 class KnowledgeDocument(models.Model):

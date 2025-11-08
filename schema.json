@@ -58,6 +58,83 @@ paths:
               schema:
                 $ref: '#/components/schemas/TokenRefresh'
           description: ''
+  /api/blog/subscribe:
+    post:
+      operationId: api_blog_subscribe_create
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlogSubscription'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BlogSubscription'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BlogSubscription'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlogSubscription'
+          description: ''
+  /api/blog/unsubscribe:
+    post:
+      operationId: api_blog_unsubscribe_create
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlogSubscription'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BlogSubscription'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BlogSubscription'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/blog/verify:
+    post:
+      operationId: api_blog_verify_create
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlogSubscription'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BlogSubscription'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BlogSubscription'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlogSubscription'
+          description: ''
   /api/blogposts/:
     get:
       operationId: api_blogposts_list
@@ -208,6 +285,345 @@ paths:
         schema:
           type: integer
         description: A unique integer value identifying this blog post.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/blogposts/{id}/bookmark/:
+    post:
+      operationId: api_blogposts_bookmark_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this blog post.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlogPost'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BlogPost'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BlogPost'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlogPost'
+          description: ''
+  /api/blogposts/{id}/comments/:
+    get:
+      operationId: api_blogposts_comments_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this blog post.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlogPost'
+          description: ''
+    post:
+      operationId: api_blogposts_comments_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this blog post.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlogPost'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BlogPost'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BlogPost'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlogPost'
+          description: ''
+  /api/blogposts/{id}/like/:
+    post:
+      operationId: api_blogposts_like_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this blog post.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlogPost'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BlogPost'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BlogPost'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlogPost'
+          description: ''
+  /api/blogposts/{id}/related/:
+    get:
+      operationId: api_blogposts_related_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this blog post.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlogPost'
+          description: ''
+  /api/blogposts/{id}/unbookmark/:
+    delete:
+      operationId: api_blogposts_unbookmark_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this blog post.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/blogposts/{id}/unlike/:
+    delete:
+      operationId: api_blogposts_unlike_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this blog post.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/blogseries/:
+    get:
+      operationId: api_blogseries_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedBlogSeriesList'
+          description: ''
+    post:
+      operationId: api_blogseries_create
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlogSeries'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BlogSeries'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BlogSeries'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlogSeries'
+          description: ''
+  /api/blogseries/{id}/:
+    get:
+      operationId: api_blogseries_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this blog series.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlogSeries'
+          description: ''
+    put:
+      operationId: api_blogseries_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this blog series.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlogSeries'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BlogSeries'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BlogSeries'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlogSeries'
+          description: ''
+    patch:
+      operationId: api_blogseries_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this blog series.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedBlogSeries'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedBlogSeries'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedBlogSeries'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlogSeries'
+          description: ''
+    delete:
+      operationId: api_blogseries_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this blog series.
         required: true
       tags:
       - api
@@ -1303,10 +1719,108 @@ components:
           type: string
         content:
           type: string
+        content_format:
+          type: string
+          maxLength: 20
+        language:
+          type: string
+          maxLength: 10
+        status:
+          type: string
+          description: draft|published|archived
+          maxLength: 20
         published_at:
           type: string
           format: date-time
           readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        excerpt:
+          type: string
+        table_of_contents: {}
+        reading_time:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        tags: {}
+        views_count:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        likes_count:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        bookmarks_count:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        comments_count:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        allow_comments:
+          type: boolean
+        featured:
+          type: boolean
+        pinned_order:
+          type: integer
+          maximum: 32767
+          minimum: -32768
+        seo_title:
+          type: string
+          maxLength: 200
+        seo_description:
+          type: string
+          maxLength: 300
+        canonical_url:
+          type: string
+          format: uri
+          maxLength: 200
+        og_image_url:
+          type: string
+          format: uri
+          maxLength: 200
+        cover_image:
+          type: string
+          format: uri
+          nullable: true
+        cover_image_url:
+          type: string
+          format: uri
+          maxLength: 200
+        series:
+          type: integer
+          nullable: true
+      required:
+      - id
+      - published_at
+      - slug
+      - title
+      - updated_at
+    BlogSeries:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          maxLength: 200
+        slug:
+          type: string
+          maxLength: 50
+          pattern: ^[-a-zA-Z0-9_]+$
+        description:
+          type: string
+        order:
+          type: integer
+          maximum: 32767
+          minimum: -32768
+        published:
+          type: boolean
         cover_image:
           type: string
           format: uri
@@ -1317,9 +1831,25 @@ components:
           maxLength: 200
       required:
       - id
-      - published_at
       - slug
       - title
+    BlogSubscription:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        verified:
+          type: boolean
+          readOnly: true
+        active:
+          type: boolean
+          readOnly: true
+      required:
+      - active
+      - email
+      - verified
     ChatAsk:
       type: object
       properties:
@@ -1568,6 +2098,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/BlogPost'
+    PaginatedBlogSeriesList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/BlogSeries'
     PaginatedExperienceList:
       type: object
       required:
@@ -1677,10 +2230,102 @@ components:
           type: string
         content:
           type: string
+        content_format:
+          type: string
+          maxLength: 20
+        language:
+          type: string
+          maxLength: 10
+        status:
+          type: string
+          description: draft|published|archived
+          maxLength: 20
         published_at:
           type: string
           format: date-time
           readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        excerpt:
+          type: string
+        table_of_contents: {}
+        reading_time:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        tags: {}
+        views_count:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        likes_count:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        bookmarks_count:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        comments_count:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        allow_comments:
+          type: boolean
+        featured:
+          type: boolean
+        pinned_order:
+          type: integer
+          maximum: 32767
+          minimum: -32768
+        seo_title:
+          type: string
+          maxLength: 200
+        seo_description:
+          type: string
+          maxLength: 300
+        canonical_url:
+          type: string
+          format: uri
+          maxLength: 200
+        og_image_url:
+          type: string
+          format: uri
+          maxLength: 200
+        cover_image:
+          type: string
+          format: uri
+          nullable: true
+        cover_image_url:
+          type: string
+          format: uri
+          maxLength: 200
+        series:
+          type: integer
+          nullable: true
+    PatchedBlogSeries:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          maxLength: 200
+        slug:
+          type: string
+          maxLength: 50
+          pattern: ^[-a-zA-Z0-9_]+$
+        description:
+          type: string
+        order:
+          type: integer
+          maximum: 32767
+          minimum: -32768
+        published:
+          type: boolean
         cover_image:
           type: string
           format: uri

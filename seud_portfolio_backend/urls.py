@@ -35,6 +35,7 @@ router.register(r'projects', portfolio_views.ProjectViewSet)
 router.register(r'experiences', portfolio_views.ExperienceViewSet)
 router.register(r'skills', portfolio_views.SkillViewSet)
 router.register(r'blogposts', portfolio_views.BlogPostViewSet)
+router.register(r'blogseries', portfolio_views.BlogSeriesViewSet, basename='blogseries')
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -56,6 +57,10 @@ urlpatterns = [
     path("api/chat/ask", portfolio_views.ChatAskView.as_view(), name="chat-ask"),
     path("api/knowledge/ingest_code", portfolio_views.KnowledgeIngestCodeView.as_view(), name="knowledge-ingest-code"),
     path("api/knowledge/sources", portfolio_views.KnowledgeSourcesView.as_view(), name="knowledge-sources"),
+    # Blog subscriptions
+    path("api/blog/subscribe", portfolio_views.BlogSubscriptionView.as_view(), name="blog-subscribe"),
+    path("api/blog/verify", portfolio_views.BlogSubscriptionVerifyView.as_view(), name="blog-verify"),
+    path("api/blog/unsubscribe", portfolio_views.BlogSubscriptionUnsubscribeView.as_view(), name="blog-unsubscribe"),
     path("api/github/repos.json", portfolio_views.GitHubReposJSONView.as_view(), name="github-repos-json"),
     path("test/github-repos", portfolio_views.GitHubReposHTMLView.as_view(), name="github-repos-html"),
     path("api/github/ingest_pinned", portfolio_views.GitHubIngestPinnedView.as_view(), name="github-ingest-pinned"),

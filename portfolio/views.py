@@ -5,13 +5,29 @@ from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle, ScopedRateThrottle
 from drf_spectacular.utils import extend_schema
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Profile, Project, Experience, Skill, BlogPost, KnowledgeDocument, ChatLog
+from .models import (
+    Profile,
+    Project,
+    Experience,
+    Skill,
+    BlogPost,
+    BlogSeries,
+    BlogComment,
+    BlogLike,
+    BlogBookmark,
+    BlogSubscription,
+    KnowledgeDocument,
+    ChatLog,
+)
 from .serializers import (
     ProfileSerializer,
     ProjectSerializer,
     ExperienceSerializer,
     SkillSerializer,
     BlogPostSerializer,
+    BlogSeriesSerializer,
+    BlogCommentSerializer,
+    BlogSubscriptionSerializer,
     ContactSerializer,
     KnowledgeDocumentSerializer,
     ChatLogSerializer,
@@ -64,12 +80,182 @@ class SkillViewSet(viewsets.ModelViewSet):
     filterset_fields = ["category", "primary"]
     ordering_fields = ["order", "name", "id"]
 
+
+class BlogSeriesViewSet(viewsets.ModelViewSet):
+    queryset = BlogSeries.objects.all()
+    serializer_class = BlogSeriesSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["title", "slug", "description"]
+    ordering_fields = ["order", "title", "id"]
+
+from django.db.models import F
+from rest_framework.decorators import action
+import hashlib
+
+
+def _client_fingerprint(request):
+    ua = request.META.get("HTTP_USER_AGENT", "")
+    ip = request.META.get("REMOTE_ADDR", "") or request.META.get("HTTP_X_FORWARDED_FOR", "")
+    raw = f"{ip}|{ua}".encode("utf-8", errors="ignore")
+    return hashlib.sha256(raw).hexdigest()
+
+
 class BlogPostViewSet(viewsets.ModelViewSet):
     queryset = BlogPost.objects.all()
     serializer_class = BlogPostSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["title", "slug", "summary"]
-    ordering_fields = ["published_at", "id"]
+    search_fields = ["title", "slug", "summary", "content", "tags"]
+    ordering_fields = ["published_at", "updated_at", "views_count", "likes_count", "id"]
+
+    def retrieve(self, request, *args, **kwargs):
+        # Increment views atomically
+        pk = kwargs.get(self.lookup_field or "pk")
+        try:
+            BlogPost.objects.filter(pk=pk).update(views_count=F("views_count") + 1)
+        except Exception:
+            pass
+        return super().retrieve(request, *args, **kwargs)
+
+    @action(detail=True, methods=["post"], permission_classes=[AllowAny])
+    def like(self, request, pk=None):
+        post = self.get_object()
+        fp = _client_fingerprint(request)
+        BlogLike.objects.get_or_create(post=post, fingerprint=fp)
+        post.likes_count = BlogLike.objects.filter(post=post).count()
+        post.save(update_fields=["likes_count"])
+        return Response({"likes": post.likes_count})
+
+    @action(detail=True, methods=["delete"], permission_classes=[AllowAny])
+    def unlike(self, request, pk=None):
+        post = self.get_object()
+        fp = _client_fingerprint(request)
+        BlogLike.objects.filter(post=post, fingerprint=fp).delete()
+        post.likes_count = BlogLike.objects.filter(post=post).count()
+        post.save(update_fields=["likes_count"])
+        return Response({"likes": post.likes_count})
+
+    @action(detail=True, methods=["post"], permission_classes=[AllowAny])
+    def bookmark(self, request, pk=None):
+        post = self.get_object()
+        fp = _client_fingerprint(request)
+        BlogBookmark.objects.get_or_create(post=post, fingerprint=fp)
+        post.bookmarks_count = BlogBookmark.objects.filter(post=post).count()
+        post.save(update_fields=["bookmarks_count"])
+        return Response({"bookmarks": post.bookmarks_count})
+
+    @action(detail=True, methods=["delete"], permission_classes=[AllowAny])
+    def unbookmark(self, request, pk=None):
+        post = self.get_object()
+        fp = _client_fingerprint(request)
+        BlogBookmark.objects.filter(post=post, fingerprint=fp).delete()
+        post.bookmarks_count = BlogBookmark.objects.filter(post=post).count()
+        post.save(update_fields=["bookmarks_count"])
+        return Response({"bookmarks": post.bookmarks_count})
+
+    @action(detail=True, methods=["get", "post"], permission_classes=[AllowAny], url_path="comments")
+    def comments(self, request, pk=None):
+        post = self.get_object()
+        if request.method.lower() == "get":
+            qs = BlogComment.objects.filter(post=post, is_deleted=False, is_approved=True).order_by("created_at")
+            return Response(BlogCommentSerializer(qs, many=True).data)
+        # POST create
+        if not post.allow_comments:
+            return Response({"error": "comments disabled"}, status=400)
+        data = request.data or {}
+        parent_id = data.get("parent")
+        parent = None
+        if parent_id:
+            parent = BlogComment.objects.filter(pk=parent_id, post=post).first()
+        comment = BlogComment.objects.create(
+            post=post,
+            parent=parent,
+            name=(data.get("name") or "Anonymous").strip()[:120],
+            email=(data.get("email") or "").strip(),
+            content=(data.get("content") or "").strip(),
+            is_approved=True,
+        )
+        post.comments_count = BlogComment.objects.filter(post=post, is_deleted=False, is_approved=True).count()
+        post.save(update_fields=["comments_count"])
+        return Response(BlogCommentSerializer(comment).data, status=201)
+
+    @action(detail=True, methods=["get"], permission_classes=[AllowAny])
+    def related(self, request, pk=None):
+        post = self.get_object()
+        qs = BlogPost.objects.exclude(pk=post.pk).filter(status="published")
+        # Boost same series first
+        results = []
+        if post.series_id:
+            results.extend(list(qs.filter(series_id=post.series_id).order_by("pinned_order", "-published_at")[:6]))
+        # By tag overlap
+        tags = set([t.lower() for t in (post.tags or [])])
+        if tags:
+            tagged = []
+            for cand in qs:
+                ctags = set([t.lower() for t in (cand.tags or [])])
+                if ctags & tags:
+                    tagged.append((len(ctags & tags), cand))
+            tagged.sort(key=lambda x: (-x[0], -x[1].published_at.timestamp() if x[1].published_at else 0))
+            results.extend([c for _, c in tagged[:6]])
+        # Fallback recent
+        if len(results) < 6:
+            for cand in qs.order_by("-published_at")[:6]:
+                if cand not in results:
+                    results.append(cand)
+        results = results[:6]
+        return Response(BlogPostSerializer(results, many=True).data)
+
+
+class BlogSubscriptionView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(request=BlogSubscriptionSerializer, responses={200: BlogSubscriptionSerializer})
+    def post(self, request):
+        s = BlogSubscriptionSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        email = s.validated_data["email"].lower()
+        sub, created = BlogSubscription.objects.get_or_create(email=email)
+        if not created and not sub.active:
+            sub.active = True
+            sub.save(update_fields=["active"])
+        return Response({"email": sub.email, "verified": sub.verified, "active": sub.active})
+
+
+class BlogSubscriptionVerifyView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(request=BlogSubscriptionSerializer, responses={200: BlogSubscriptionSerializer})
+    def post(self, request):
+        token = request.data.get("token") or ""
+        try:
+            uuid.UUID(token)
+        except Exception:
+            return Response({"error": "invalid token"}, status=400)
+        sub = BlogSubscription.objects.filter(verify_token=token).first()
+        if not sub:
+            return Response({"error": "not found"}, status=404)
+        if not sub.verified:
+            sub.verified = True
+            sub.save(update_fields=["verified"])
+        return Response({"email": sub.email, "verified": sub.verified, "active": sub.active})
+
+
+class BlogSubscriptionUnsubscribeView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(request=BlogSubscriptionSerializer, responses={200: None})
+    def post(self, request):
+        token = request.data.get("token") or ""
+        try:
+            uuid.UUID(token)
+        except Exception:
+            return Response({"error": "invalid token"}, status=400)
+        sub = BlogSubscription.objects.filter(unsub_token=token).first()
+        if not sub:
+            return Response({"error": "not found"}, status=404)
+        if sub.active:
+            sub.active = False
+            sub.save(update_fields=["active"])
+        return Response(status=200)
 
 
 class ContactThrottle(ScopedRateThrottle):
@@ -128,7 +314,11 @@ class KnowledgeRefreshView(APIView):
                 )
                 docs.append(KnowledgeDocument.objects.create(source=f"skill:{s.id}", title=s.name, content=content))
             for b in BlogPost.objects.all():
-                content = f"Blog: {b.title}\nSlug: {b.slug}\nSummary: {b.summary}\nContent: {b.content[:1500]}\n"
+                tg = ", ".join(b.tags or [])
+                content = (
+                    f"Blog: {b.title}\nSlug: {b.slug}\nSummary: {b.summary}\nTags: {tg}\n"
+                    f"Reading: {b.reading_time} min\nContent: {b.content[:1500]}\n"
+                )
                 docs.append(KnowledgeDocument.objects.create(source=f"blog:{b.id}", title=b.title, content=content))
 
             # GitHub ingestion disabled here (metadata/README). We'll ingest code via a dedicated endpoint.
