@@ -4,9 +4,37 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 class SkillSerializer(serializers.ModelSerializer):
+    years_used = serializers.SerializerMethodField()
+    project_count = serializers.SerializerMethodField()
+
     class Meta:
         model = Skill
-        fields = "__all__"
+        fields = [
+            "id",
+            "name",
+            "category",
+            "description",
+            "docs_url",
+            "icon",
+            "highlights",
+            "since_year",
+            "years_used",
+            "primary",
+            "accent",
+            "order",
+            "project_count",
+        ]
+        read_only_fields = ["years_used", "project_count"]
+
+    def get_years_used(self, obj: Skill):
+        import datetime
+        if obj.since_year:
+            return max(0, datetime.datetime.now().year - obj.since_year)
+        return None
+
+    def get_project_count(self, obj: Skill):
+        from .models import Project  # local import to avoid circulars at import time
+        return Project.objects.filter(skills=obj).count()
 
 class ProjectSerializer(serializers.ModelSerializer):
     skills = SkillSerializer(many=True, read_only=True)

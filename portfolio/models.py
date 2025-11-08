@@ -61,14 +61,37 @@ class Profile(models.Model):
             type(self).objects.filter(pk=self.pk).update(avatar_url=new_url)
 
 class Skill(models.Model):
+    """A richer skill model without self-rated levels.
+
+    Fields:
+    - name: Display name for the skill (e.g., React, Django)
+    - category: Group skills (e.g., frontend, backend, devops, data, testing, cloud)
+    - description: Short description of how you use the skill
+    - docs_url: Useful external reference URL (official docs, spec, etc.)
+    - icon: Optional icon name or URL (frontend can map name->icon or render URL)
+    - highlights: JSON list of short bullet points
+    - since_year: Year you first used the skill (for deriving years_used)
+    - primary: Flag for core/spotlight skills
+    - accent: Hex/color token for UI accents (e.g., #10b981)
+    - order: Manual ordering weight (smaller first)
+    """
+
     name = models.CharField(max_length=80)
-    level = models.PositiveSmallIntegerField(default=3)  # 1-5
+    category = models.CharField(max_length=40, blank=True, help_text="e.g. frontend, backend, devops, cloud, data, testing")
+    description = models.CharField(max_length=200, blank=True)
+    docs_url = models.URLField(blank=True)
+    icon = models.CharField(max_length=80, blank=True, help_text="icon key or url")
+    highlights = models.JSONField(default=list, blank=True)
+    since_year = models.PositiveSmallIntegerField(null=True, blank=True)
+    primary = models.BooleanField(default=False)
+    accent = models.CharField(max_length=20, blank=True, help_text="CSS color or hex, e.g. #10b981")
+    order = models.SmallIntegerField(default=0)
 
     def __str__(self):
-        return f"{self.name} ({self.level})"
+        return f"{self.name}"
 
     class Meta:
-        ordering = ["-level", "name", "id"]
+        ordering = ["order", "name", "id"]
 
 class Project(models.Model):
     title = models.CharField(max_length=200)

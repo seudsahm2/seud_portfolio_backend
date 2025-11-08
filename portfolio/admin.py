@@ -10,8 +10,9 @@ class ProfileAdmin(admin.ModelAdmin):
 
 @admin.register(Skill)
 class SkillAdmin(admin.ModelAdmin):
-    list_display = ("name", "level")
-    list_filter = ("level",)
+    list_display = ("name", "category", "primary", "since_year", "order")
+    list_filter = ("category", "primary")
+    search_fields = ("name", "description")
 
 @admin.register(Project)
 class ProjectAdmin(admin.ModelAdmin):

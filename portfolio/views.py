@@ -60,8 +60,9 @@ class SkillViewSet(viewsets.ModelViewSet):
     queryset = Skill.objects.all()
     serializer_class = SkillSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["name"]
-    ordering_fields = ["level", "name", "id"]
+    search_fields = ["name", "description", "category"]
+    filterset_fields = ["category", "primary"]
+    ordering_fields = ["order", "name", "id"]
 
 class BlogPostViewSet(viewsets.ModelViewSet):
     queryset = BlogPost.objects.all()
@@ -112,7 +113,11 @@ class KnowledgeRefreshView(APIView):
                 content = f"Project: {pr.title}\nDescription: {pr.description}\nSkills: {skills}\nFeatured: {pr.featured}\nLink: {pr.link}\nRepo: {pr.repo}\n"
                 docs.append(KnowledgeDocument.objects.create(source=f"project:{pr.id}", title=pr.title, content=content))
             for s in Skill.objects.all():
-                content = f"Skill: {s.name}\nLevel: {s.level}\n"
+                content = (
+                    f"Skill: {s.name}\nCategory: {s.category}\nPrimary: {s.primary}\n"
+                    f"Since: {s.since_year or ''}\nDocs: {s.docs_url}\n"
+                    f"Description: {s.description}\nHighlights: {'; '.join(s.highlights or [])}\n"
+                )
                 docs.append(KnowledgeDocument.objects.create(source=f"skill:{s.id}", title=s.name, content=content))
             for b in BlogPost.objects.all():
                 content = f"Blog: {b.title}\nSlug: {b.slug}\nSummary: {b.summary}\nContent: {b.content[:1500]}\n"
@@ -180,8 +185,9 @@ class ChatAskView(APIView):
             # Fallback: assemble knowledge on the fly from DB if no cached docs exist
             parts = []
             for p in Profile.objects.all():
+                nm = getattr(p.user, "get_full_name", lambda: "")() or (p.user.username if p.user else "")
                 parts.append(
-                    f"Profile: {p.full_name}\nTitle: {p.title}\nBio: {p.bio}\nLocation: {p.location}\nWebsite: {p.website}\n"
+                    f"Profile: {nm}\nTitle: {p.title}\nTagline: {p.tagline}\nBio: {p.bio}\nLocation: {p.location}\nWebsite: {p.website}\n"
                 )
             for pr in Project.objects.all():
                 skills = ", ".join(pr.skills.values_list("name", flat=True))
@@ -189,7 +195,9 @@ class ChatAskView(APIView):
                     f"Project: {pr.title}\nDescription: {pr.description}\nSkills: {skills}\nFeatured: {pr.featured}\nLink: {pr.link}\nRepo: {pr.repo}\n"
                 )
             for s in Skill.objects.all():
-                parts.append(f"Skill: {s.name}\nLevel: {s.level}\n")
+                parts.append(
+                    f"Skill: {s.name}\nCategory: {s.category}\nPrimary: {s.primary}\nSince: {s.since_year or ''}\n"
+                )
             for b in BlogPost.objects.all():
                 parts.append(f"Blog: {b.title}\nSlug: {b.slug}\nSummary: {b.summary}\nContent: {b.content[:1500]}\n")
             knowledge = "\n---\n".join(parts)
@@ -206,7 +214,9 @@ class ChatAskView(APIView):
                 "owner_name": owner_name or "",
                 "owner_title": getattr(prof, "title", ""),
                 "owner_tagline": getattr(prof, "tagline", ""),
-                "primary_stack": getattr(prof, "primary_stack", "") or ", ".join(Skill.objects.order_by("-level").values_list("name", flat=True)[:5]),
+                "primary_stack": getattr(prof, "primary_stack", "") or ", ".join(
+                    Skill.objects.order_by("order", "name").values_list("name", flat=True)[:5]
+                ),
                 "highlights": "; ".join(getattr(prof, "highlights", []) or []),
                 "summary_tokens": max_tokens or 512,
                 "top_n": top_n,
