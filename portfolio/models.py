@@ -153,12 +153,40 @@ class Experience(models.Model):
     start_date = models.DateField()
     end_date = models.DateField(null=True, blank=True)
     description = models.TextField(blank=True)
+    # Rich fields
+    location = models.CharField(max_length=200, blank=True)
+    employment_type = models.CharField(max_length=80, blank=True, help_text="e.g., full-time, part-time, contract, internship")
+    is_remote = models.BooleanField(default=False)
+    industry = models.CharField(max_length=120, blank=True)
+    company_website = models.URLField(blank=True)
+    company_logo = models.ImageField(upload_to="experience/", storage=SupabaseMediaStorage(), blank=True, null=True)
+    company_logo_url = models.URLField(blank=True)
+    technologies = models.JSONField(default=list, blank=True, help_text="List of key technologies used")
+    achievements = models.JSONField(default=list, blank=True, help_text="List of bullet-point achievements")
+    impact = models.TextField(blank=True, help_text="Short summary of measurable impact")
+    order = models.SmallIntegerField(default=0)
 
     def __str__(self):
         return f"{self.role} @ {self.company}"
 
     class Meta:
-        ordering = ["-start_date", "-end_date", "-id"]
+        ordering = ["order", "-start_date", "-end_date", "-id"]
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        new_url = None
+        if self.company_logo:
+            try:
+                new_url = self.company_logo.url
+            except Exception:
+                try:
+                    from django.conf import settings as _s
+                    if self.company_logo.name and getattr(_s, "MEDIA_URL", ""):
+                        new_url = f"{_s.MEDIA_URL.rstrip('/')}/{self.company_logo.name}"
+                except Exception:
+                    new_url = None
+        if new_url and new_url != self.company_logo_url:
+            type(self).objects.filter(pk=self.pk).update(company_logo_url=new_url)
 
 class BlogPost(models.Model):
     title = models.CharField(max_length=200)

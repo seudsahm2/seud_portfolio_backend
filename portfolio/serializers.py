@@ -72,9 +72,43 @@ class ProjectSerializer(serializers.ModelSerializer):
         ]
 
 class ExperienceSerializer(serializers.ModelSerializer):
+    duration_months = serializers.SerializerMethodField()
+
     class Meta:
         model = Experience
-        fields = "__all__"
+        fields = [
+            "id",
+            "company",
+            "role",
+            "start_date",
+            "end_date",
+            "description",
+            "location",
+            "employment_type",
+            "is_remote",
+            "industry",
+            "company_website",
+            "company_logo",
+            "company_logo_url",
+            "technologies",
+            "achievements",
+            "impact",
+            "order",
+            "duration_months",
+        ]
+        read_only_fields = ["company_logo_url", "duration_months"]
+
+    def get_duration_months(self, obj: Experience):
+        import datetime
+        start = obj.start_date
+        end = obj.end_date or datetime.date.today()
+        if not start:
+            return None
+        months = (end.year - start.year) * 12 + (end.month - start.month)
+        # Round up by one if there are remaining days
+        if end.day >= start.day:
+            months += 1
+        return max(0, months)
 
 class ProfileSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
