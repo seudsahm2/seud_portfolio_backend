@@ -4,8 +4,9 @@ from .models import KnowledgeDocument, ChatLog
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ("full_name", "title", "email")
-    search_fields = ("full_name", "title", "email")
+    list_display = ("id", "user", "title", "tagline", "years_experience", "open_to_opportunities")
+    search_fields = ("title", "tagline", "primary_stack", "location")
+    readonly_fields = ("avatar_url",)
 
 @admin.register(Skill)
 class SkillAdmin(admin.ModelAdmin):

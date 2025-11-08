@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from .models import Profile, Project, Experience, Skill, BlogPost, KnowledgeDocument, ChatLog
+from django.contrib.auth import get_user_model
+User = get_user_model()
 
 class SkillSerializer(serializers.ModelSerializer):
     class Meta:
@@ -19,9 +21,40 @@ class ExperienceSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 class ProfileSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+    email = serializers.SerializerMethodField()
+
     class Meta:
         model = Profile
-        fields = "__all__"
+        fields = [
+            "id",
+            "user",
+            "name",
+            "email",
+            "title",
+            "tagline",
+            "bio",
+            "location",
+            "website",
+            "primary_stack",
+            "years_experience",
+            "open_to_opportunities",
+            "avatar",
+            "avatar_url",
+            "socials",
+            "highlights",
+        ]
+        read_only_fields = ["name", "email", "avatar_url"]
+
+    def get_name(self, obj: Profile):
+        if obj.user and hasattr(obj.user, "get_full_name"):
+            return obj.user.get_full_name() or obj.user.username
+        return None
+
+    def get_email(self, obj: Profile):
+        if obj.user:
+            return obj.user.email
+        return None
 
 class BlogPostSerializer(serializers.ModelSerializer):
     class Meta:

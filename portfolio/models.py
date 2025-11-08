@@ -1,18 +1,64 @@
 from django.db import models
 from django.core.files.storage import default_storage
 from django.utils.module_loading import import_string
+from django.conf import settings
+from django.core.exceptions import ValidationError
 SupabaseMediaStorage = import_string('portfolio.storage_backends.SupabaseMediaStorage')
 
 class Profile(models.Model):
-    full_name = models.CharField(max_length=120)
+    # Singleton profile linked to a staff user (optional link to avoid migration issues in clean DB)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="portfolio_profile",
+        blank=True,
+        null=True,
+        limit_choices_to={"is_staff": True},
+    )
     title = models.CharField(max_length=120, blank=True)
+    tagline = models.CharField(max_length=180, blank=True)
     bio = models.TextField(blank=True)
-    email = models.EmailField(blank=True)
     location = models.CharField(max_length=120, blank=True)
     website = models.URLField(blank=True)
+    primary_stack = models.CharField(max_length=200, blank=True, help_text="Short comma-separated primary stack")
+    years_experience = models.PositiveSmallIntegerField(default=0)
+    open_to_opportunities = models.BooleanField(default=True)
+
+    # Media
+    avatar = models.ImageField(upload_to="profile/", storage=SupabaseMediaStorage(), blank=True, null=True)
+    avatar_url = models.URLField(blank=True)
+
+    # Flexible, non-relational fields
+    socials = models.JSONField(default=dict, blank=True, help_text="e.g. {github, linkedin, twitter, website}")
+    highlights = models.JSONField(default=list, blank=True, help_text="List of short bullet points to showcase")
 
     def __str__(self):
-        return self.full_name
+        # Prefer user full name; fall back to title or id
+        if self.user and (getattr(self.user, "get_full_name", None)):
+            name = self.user.get_full_name() or self.user.username
+        else:
+            name = "Profile"
+        return name
+
+    def save(self, *args, **kwargs):
+        # Enforce singleton: only one row allowed
+        if not self.pk and type(self).objects.exists():
+            raise ValidationError("Only one Profile instance is allowed. Update the existing profile instead.")
+        super().save(*args, **kwargs)
+        # Ensure avatar_url is set from storage URL when available
+        new_url = None
+        if self.avatar:
+            try:
+                new_url = self.avatar.url
+            except Exception:
+                try:
+                    from django.conf import settings as _s
+                    if self.avatar.name and getattr(_s, "MEDIA_URL", ""):
+                        new_url = f"{_s.MEDIA_URL.rstrip('/')}/{self.avatar.name}"
+                except Exception:
+                    new_url = None
+        if new_url and new_url != self.avatar_url:
+            type(self).objects.filter(pk=self.pk).update(avatar_url=new_url)
 
 class Skill(models.Model):
     name = models.CharField(max_length=80)

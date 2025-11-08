@@ -34,7 +34,12 @@ class ProfileViewSet(viewsets.ModelViewSet):
     queryset = Profile.objects.all()
     serializer_class = ProfileSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["full_name", "title", "email"]
+    search_fields = ["title", "tagline", "location", "primary_stack"]
+
+    def create(self, request, *args, **kwargs):
+        if Profile.objects.exists():
+            return Response({"detail": "Profile already exists. Update it instead."}, status=status.HTTP_400_BAD_REQUEST)
+        return super().create(request, *args, **kwargs)
 
 class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all()
@@ -94,8 +99,14 @@ class KnowledgeRefreshView(APIView):
         with transaction.atomic():
             KnowledgeDocument.objects.all().delete()
             for p in Profile.objects.all():
-                content = f"Profile: {p.full_name}\nTitle: {p.title}\nBio: {p.bio}\nLocation: {p.location}\nWebsite: {p.website}\n"
-                docs.append(KnowledgeDocument.objects.create(source="profile", title=p.full_name, content=content))
+                name = getattr(p.user, "get_full_name", lambda: "")() or (p.user.username if p.user else "")
+                content = (
+                    f"Profile: {name}\nTitle: {p.title}\nTagline: {p.tagline}\nBio: {p.bio}\n"
+                    f"Location: {p.location}\nWebsite: {p.website}\nPrimary Stack: {p.primary_stack}\n"
+                    f"Years Experience: {p.years_experience}\nOpen To Opportunities: {p.open_to_opportunities}\n"
+                    f"Highlights: {'; '.join(p.highlights or [])}\n"
+                )
+                docs.append(KnowledgeDocument.objects.create(source="profile", title=name or "profile", content=content))
             for pr in Project.objects.all():
                 skills = ", ".join(pr.skills.values_list("name", flat=True))
                 content = f"Project: {pr.title}\nDescription: {pr.description}\nSkills: {skills}\nFeatured: {pr.featured}\nLink: {pr.link}\nRepo: {pr.repo}\n"
@@ -188,12 +199,19 @@ class ChatAskView(APIView):
         try:
             # Build prompt variables from Profile if available
             prof = Profile.objects.first()
+            owner_name = None
+            if prof and prof.user and hasattr(prof.user, "get_full_name"):
+                owner_name = prof.user.get_full_name() or prof.user.username
             system_vars = {
-                "owner_name": getattr(prof, "full_name", ""),
+                "owner_name": owner_name or "",
                 "owner_title": getattr(prof, "title", ""),
-                "primary_stack": ", ".join(Skill.objects.order_by("-level").values_list("name", flat=True)[:5]),
+                "owner_tagline": getattr(prof, "tagline", ""),
+                "primary_stack": getattr(prof, "primary_stack", "") or ", ".join(Skill.objects.order_by("-level").values_list("name", flat=True)[:5]),
+                "highlights": "; ".join(getattr(prof, "highlights", []) or []),
                 "summary_tokens": max_tokens or 512,
                 "top_n": top_n,
+                "years_experience": getattr(prof, "years_experience", 0),
+                "open_to_opportunities": getattr(prof, "open_to_opportunities", True),
             }
             res = ai_ask(provider, question, knowledge, model=model, max_tokens=max_tokens, system_vars=system_vars, structured=structured)
             log.answer = res.text or "(empty answer)"
