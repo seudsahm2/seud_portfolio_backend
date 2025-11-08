@@ -203,6 +203,7 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "contact": "10/hour",
         "chat": "30/minute",
+        "ingest_pinned": "50/hour",
     },
 }
 

@@ -38,10 +38,38 @@ class SkillSerializer(serializers.ModelSerializer):
 
 class ProjectSerializer(serializers.ModelSerializer):
     skills = SkillSerializer(many=True, read_only=True)
+    topics = serializers.ListField(child=serializers.CharField(), required=False)
 
     class Meta:
         model = Project
-        fields = "__all__"
+        fields = [
+            "id",
+            "title",
+            "description",
+            "link",
+            "repo",
+            "skills",
+            "featured",
+            "created_at",
+            "stars",
+            "forks",
+            "language",
+            "topics",
+            "last_pushed",
+            "image",
+            "image_url",
+            "readme_excerpt",
+            "license_spdx",
+            "license_name",
+            "open_issues",
+            "watchers",
+            "default_branch",
+            "latest_release_tag",
+            "latest_release_published",
+            "is_archived",
+            "is_template",
+            "has_ci",
+        ]
 
 class ExperienceSerializer(serializers.ModelSerializer):
     class Meta:

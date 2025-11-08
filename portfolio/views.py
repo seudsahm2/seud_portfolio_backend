@@ -110,7 +110,15 @@ class KnowledgeRefreshView(APIView):
                 docs.append(KnowledgeDocument.objects.create(source="profile", title=name or "profile", content=content))
             for pr in Project.objects.all():
                 skills = ", ".join(pr.skills.values_list("name", flat=True))
-                content = f"Project: {pr.title}\nDescription: {pr.description}\nSkills: {skills}\nFeatured: {pr.featured}\nLink: {pr.link}\nRepo: {pr.repo}\n"
+                topics = ", ".join((pr.topics or []))
+                meta = (
+                    f"Stars: {pr.stars} | Forks: {pr.forks} | Language: {pr.language} | "
+                    f"Topics: {topics} | Last Pushed: {pr.last_pushed or ''}"
+                )
+                content = (
+                    f"Project: {pr.title}\nDescription: {pr.description}\nSkills: {skills}\nFeatured: {pr.featured}\n"
+                    f"Link: {pr.link}\nRepo: {pr.repo}\n{meta}\n"
+                )
                 docs.append(KnowledgeDocument.objects.create(source=f"project:{pr.id}", title=pr.title, content=content))
             for s in Skill.objects.all():
                 content = (
@@ -191,8 +199,14 @@ class ChatAskView(APIView):
                 )
             for pr in Project.objects.all():
                 skills = ", ".join(pr.skills.values_list("name", flat=True))
+                topics = ", ".join((pr.topics or []))
+                meta = (
+                    f"Stars: {pr.stars} | Forks: {pr.forks} | Language: {pr.language} | "
+                    f"Topics: {topics} | Last Pushed: {pr.last_pushed or ''}"
+                )
                 parts.append(
-                    f"Project: {pr.title}\nDescription: {pr.description}\nSkills: {skills}\nFeatured: {pr.featured}\nLink: {pr.link}\nRepo: {pr.repo}\n"
+                    f"Project: {pr.title}\nDescription: {pr.description}\nSkills: {skills}\nFeatured: {pr.featured}\n"
+                    f"Link: {pr.link}\nRepo: {pr.repo}\n{meta}\n"
                 )
             for s in Skill.objects.all():
                 parts.append(
@@ -500,3 +514,230 @@ class KnowledgeIngestCodeView(APIView):
             "ingested_count": len(ingested),
             "skipped": skipped,
         })
+
+
+class GitHubIngestPinnedView(APIView):
+    """Admin-only: fetch pinned GitHub repositories (via GraphQL) and upsert Projects.
+
+    Requires GITHUB_TOKEN (with public_repo scope sufficient for public pinned repos; private requires repo scope).
+    Upsert logic:
+      - Identify project by repo URL (htmlUrl) or link if already stored.
+      - Update stars, forks, language, topics, last_pushed, featured=True.
+      - If repository topics include names matching existing Skill.name (case-insensitive) or primary language matches a Skill,
+        attach those skills (non-destructive; existing associations preserved).
+    Body: { username?: string } – if omitted, GraphQL viewer used (token required).
+    """
+    permission_classes = [IsAdminUser]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "ingest_pinned"
+
+    @extend_schema(request=None, responses={200: ProjectSerializer(many=True)})
+    def post(self, request):
+        gh_token = getattr(settings, "GITHUB_TOKEN", "")
+        if not gh_token:
+            return Response({"error": "GITHUB_TOKEN not configured"}, status=400)
+        username = request.data.get("username")
+        # Build GraphQL query depending on whether a username was provided.
+        if username:
+            query = """
+            query($login: String!) {
+                user(login: $login) {
+                    pinnedItems(first: 10, types: REPOSITORY) {
+                        totalCount
+                        edges { node { ...RepoFields } }
+                    }
+                }
+            }
+            fragment RepoFields on Repository {
+                name
+                description
+                url
+                homepageUrl
+                stargazerCount
+                forkCount
+                primaryLanguage { name }
+                repositoryTopics(first: 20) { edges { node { topic { name } } } }
+                pushedAt
+                licenseInfo { spdxId name }
+                issues(states: OPEN) { totalCount }
+                watchers { totalCount }
+                defaultBranchRef { name }
+                latestRelease { tagName name publishedAt }
+                isArchived
+                isTemplate
+                readme1: object(expression: "HEAD:README.md") { ... on Blob { text byteSize } }
+                readme2: object(expression: "HEAD:README.MD") { ... on Blob { text byteSize } }
+                readme3: object(expression: "HEAD:README") { ... on Blob { text byteSize } }
+                workflowsDir: object(expression: "HEAD:.github/workflows") { ... on Tree { entries { name } } }
+            }
+            """
+            variables = {"login": username}
+        else:
+            query = """
+            query {
+                viewer {
+                    pinnedItems(first: 10, types: REPOSITORY) {
+                        totalCount
+                        edges { node { ...RepoFields } }
+                    }
+                }
+            }
+            fragment RepoFields on Repository {
+                name
+                description
+                url
+                homepageUrl
+                stargazerCount
+                forkCount
+                primaryLanguage { name }
+                repositoryTopics(first: 20) { edges { node { topic { name } } } }
+                pushedAt
+                licenseInfo { spdxId name }
+                issues(states: OPEN) { totalCount }
+                watchers { totalCount }
+                defaultBranchRef { name }
+                latestRelease { tagName name publishedAt }
+                isArchived
+                isTemplate
+                readme1: object(expression: "HEAD:README.md") { ... on Blob { text byteSize } }
+                readme2: object(expression: "HEAD:README.MD") { ... on Blob { text byteSize } }
+                readme3: object(expression: "HEAD:README") { ... on Blob { text byteSize } }
+                workflowsDir: object(expression: "HEAD:.github/workflows") { ... on Tree { entries { name } } }
+            }
+            """
+            variables = {}
+        headers = {
+            "Authorization": f"Bearer {gh_token}",
+            "Accept": "application/json",
+        }
+        # Cache guard to avoid frequent repeated updates (10 minutes)
+        from django.core.cache import cache
+        cache_key = f"gh_ingest_pinned_lock:{username or 'viewer'}"
+        if cache.get(cache_key):
+            return Response({"detail": "Ingestion recently performed; please wait a few minutes."}, status=429)
+        cache.set(cache_key, True, timeout=10 * 60)
+        try:
+            r = requests.post("https://api.github.com/graphql", json={"query": query, "variables": variables}, headers=headers, timeout=25)
+            if not r.ok:
+                return Response({"error": "GraphQL request failed", "status": r.status_code, "detail": r.text[:300]}, status=502)
+            data = r.json() or {}
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+        # Surface GraphQL errors instead of failing silently
+        if isinstance(data, dict) and data.get("errors"):
+            return Response({"error": "GitHub GraphQL errors", "details": data.get("errors")}, status=502)
+
+        pinned = []
+        container = (data.get("data", {}) or {})
+        items = None
+        if username:
+            user_obj = container.get("user") or {}
+            items = user_obj.get("pinnedItems") or {}
+        else:
+            viewer_obj = container.get("viewer") or {}
+            items = viewer_obj.get("pinnedItems") or {}
+        edges = (items.get("edges") or []) if isinstance(items, dict) else []
+        pinned_count = int((items or {}).get("totalCount") or 0)
+
+        # Skill lookup maps
+        skill_by_lower = {s.name.lower(): s for s in Skill.objects.all()}
+        updated_projects = []
+        from django.utils.dateparse import parse_datetime
+
+        for edge in edges:
+            node = edge.get("node") or {}
+            url = node.get("url")
+            if not url:
+                continue
+            homepage = node.get("homepageUrl") or ""
+            title = node.get("name") or ""
+            desc = node.get("description") or ""
+            stars = node.get("stargazerCount") or 0
+            forks = node.get("forkCount") or 0
+            lang = (node.get("primaryLanguage") or {}).get("name") or ""
+            topic_edges = (node.get("repositoryTopics") or {}).get("edges") or []
+            topics = [te.get("node", {}).get("topic", {}).get("name") for te in topic_edges if isinstance(te, dict)]
+            pushed_at_raw = node.get("pushedAt")
+            pushed_dt = parse_datetime(pushed_at_raw) if pushed_at_raw else None
+            # Rich details
+            lic = node.get("licenseInfo") or {}
+            license_spdx = lic.get("spdxId") or ""
+            license_name = lic.get("name") or ""
+            open_issues = ((node.get("issues") or {}).get("totalCount") or 0)
+            watchers = ((node.get("watchers") or {}).get("totalCount") or 0)
+            default_branch = ((node.get("defaultBranchRef") or {}).get("name") or "")
+            latest_rel = node.get("latestRelease") or {}
+            latest_release_tag = latest_rel.get("tagName") or (latest_rel.get("name") or "")
+            latest_release_published = parse_datetime(latest_rel.get("publishedAt")) if latest_rel.get("publishedAt") else None
+            is_archived = bool(node.get("isArchived"))
+            is_template = bool(node.get("isTemplate"))
+            readme_text = None
+            for key in ("readme1", "readme2", "readme3"):
+                blob = node.get(key) or {}
+                if isinstance(blob, dict) and blob.get("text"):
+                    readme_text = blob.get("text")
+                    break
+            wf = node.get("workflowsDir") or {}
+            entries = (wf.get("entries") or []) if isinstance(wf, dict) else []
+            has_ci = bool(entries)
+
+            # Upsert Project by repo URL
+            proj, _created = Project.objects.get_or_create(repo=url, defaults={
+                "title": title or url.rsplit("/", 1)[-1],
+                "description": desc or "",
+                "link": homepage or url,
+            })
+            # Update metadata
+            changed = False
+            for attr, val in [
+                ("title", title or proj.title),
+                ("description", desc or proj.description),
+                ("link", homepage or proj.link or url),
+                ("stars", stars),
+                ("forks", forks),
+                ("language", lang),
+                ("topics", topics),
+                ("last_pushed", pushed_dt),
+                ("featured", True),
+                ("license_spdx", license_spdx),
+                ("license_name", license_name),
+                ("open_issues", open_issues),
+                ("watchers", watchers),
+                ("default_branch", default_branch),
+                ("latest_release_tag", latest_release_tag),
+                ("latest_release_published", latest_release_published),
+                ("is_archived", is_archived),
+                ("is_template", is_template),
+                ("has_ci", has_ci),
+            ]:
+                if getattr(proj, attr) != val:
+                    setattr(proj, attr, val)
+                    changed = True
+            # README excerpt: store first ~3000 chars to keep it lightweight
+            if readme_text:
+                excerpt = (readme_text or "")[:3000]
+                if proj.readme_excerpt != excerpt:
+                    proj.readme_excerpt = excerpt
+                    changed = True
+            if changed:
+                proj.save()
+            # Associate skills by language/topic names
+            to_add = []
+            if lang and lang.lower() in skill_by_lower:
+                to_add.append(skill_by_lower[lang.lower()])
+            for t in topics:
+                if t and t.lower() in skill_by_lower:
+                    to_add.append(skill_by_lower[t.lower()])
+            if to_add:
+                for s in to_add:
+                    proj.skills.add(s)
+            updated_projects.append(proj)
+
+        # Serialize; include pinned count as a header for diagnostics without breaking clients
+        resp = Response(ProjectSerializer(updated_projects, many=True).data)
+        try:
+            resp["X-Pinned-Count"] = str(pinned_count)
+            resp["X-Updated-Count"] = str(len(updated_projects))
+        except Exception:
+            pass
+        return resp

@@ -58,6 +58,7 @@ urlpatterns = [
     path("api/knowledge/sources", portfolio_views.KnowledgeSourcesView.as_view(), name="knowledge-sources"),
     path("api/github/repos.json", portfolio_views.GitHubReposJSONView.as_view(), name="github-repos-json"),
     path("test/github-repos", portfolio_views.GitHubReposHTMLView.as_view(), name="github-repos-html"),
+    path("api/github/ingest_pinned", portfolio_views.GitHubIngestPinnedView.as_view(), name="github-ingest-pinned"),
     path("api/auth/jwt/create", TokenObtainPairView.as_view(), name="jwt-create"),
     path("api/auth/jwt/refresh", TokenRefreshView.as_view(), name="jwt-refresh"),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
