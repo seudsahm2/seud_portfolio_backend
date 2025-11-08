@@ -191,7 +191,8 @@ class Experience(models.Model):
 
 class BlogPost(models.Model):
     title = models.CharField(max_length=200)
-    slug = models.SlugField(unique=True)
+    # Increase slug length to accommodate long descriptive titles used in seed data
+    slug = models.SlugField(unique=True, max_length=200)
     summary = models.TextField(blank=True)
     content = models.TextField(blank=True)
     content_format = models.CharField(max_length=20, blank=True, default="markdown")
